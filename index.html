@@ -138,6 +138,20 @@
             transform: translateY(0) scale(1);
             filter: blur(0);
         }
+        /* Kartu katalog dan promo muncul perlahan saat masuk viewport,
+           lalu diulang ketika pengguna menggulir naik maupun turun. */
+        .catalog-scroll-reveal {
+            opacity:  0;
+            transform: translateY(34px) scale(.985);
+            filter: blur(2px);
+            transition: opacity .78s ease, transform .78s cubic-bezier(.16,1,.3,1), filter .78s ease;
+            will-change: opacity, transform;
+        }
+        .catalog-scroll-reveal.is-catalog-visible {
+            opacity: 1;
+            transform: translateY(0) scale(1);
+            filter: blur(0);
+        }
         @media (prefers-reduced-motion: reduce) {
             .page-reveal-item, .card-reveal-item { animation: none !important; }
             .zoom-out-card, .timeline-fade-item { transition: none !important; }
@@ -1321,6 +1335,7 @@
         }
 
         let homeScrollRevealObserver = null;
+        let catalogScrollRevealObserver = null;
 
         function setupHomeScrollReveal() {
             const exploration = document.getElementById('home-exploration-section');
@@ -1354,6 +1369,10 @@
             const aboutButton = about.querySelector('button');
             if (aboutButton) reveal(aboutButton, 320);
 
+            // Dua banner promo muncul perlahan satu per satu ketika digulir.
+            const promoBanners = document.querySelectorAll('#page-beranda > section:nth-of-type(2) > div');
+            promoBanners.forEach((banner, index) => reveal(banner, index * 150));
+
             // Eksplorasi: heading dan filter muncul dahulu, lalu buku per baris.
             const explorationHeader = exploration.querySelector(':scope > div:first-child');
             const categoryPills = document.getElementById('home-category-pills');
@@ -1377,6 +1396,29 @@
             });
         }
 
+        function setupCatalogScrollReveal() {
+            const grid = document.getElementById('katalog-books-grid');
+            if (!grid || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+
+            if (catalogScrollRevealObserver) catalogScrollRevealObserver.disconnect();
+            catalogScrollRevealObserver = new IntersectionObserver((entries) => {
+                entries.forEach(entry => {
+                    if (entry.isIntersecting) {
+                        entry.target.classList.add('is-catalog-visible');
+                    } else {
+                        entry.target.classList.remove('is-catalog-visible');
+                    }
+                });
+            }, { threshold: 0.08, rootMargin: '0px 0px -6% 0px' });
+
+            Array.from(grid.children).forEach((card, index) => {
+                card.classList.add('catalog-scroll-reveal');
+                card.classList.remove('is-catalog-visible');
+                card.style.transitionDelay = `${(index % 4) * 90}ms`;
+                catalogScrollRevealObserver.observe(card);
+            });
+        }
+
         function animatePageEntrance(page) {
             if (!page || window.matchMedia('(prefers-reduced-motion: reduce)').matches) return;
 
@@ -1389,6 +1431,7 @@
             });
 
             if (page.id === 'page-beranda') setupHomeScrollReveal();
+            if (page.id === 'page-katalog') setupCatalogScrollReveal();
 
             const bookCards = page.querySelectorAll('#katalog-books-grid > div');
             bookCards.forEach((card, index) => {
@@ -1626,6 +1669,9 @@
             if (sort === 'stock-desc') filtered.sort((a, b) => b.stock - a.stock);
 
             renderBookCardGrid(filtered, 'katalog-books-grid');
+            if (!document.getElementById('page-katalog')?.classList.contains('hidden')) {
+                setupCatalogScrollReveal();
+            }
         }
 
         function renderBookCardGrid(bookList, containerId) {
@@ -2461,7 +2507,8 @@
                 entries.forEach((entry) => {
                     if (entry.isIntersecting) {
                         entry.target.classList.add('is-visible');
-                        profilScrollObserver.unobserve(entry.target);
+                    } else {
+                        entry.target.classList.remove('is-visible');
                     }
                 });
             }, {
